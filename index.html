@@ -892,6 +892,9 @@ a { color: inherit; text-decoration: none; }
           </label>
         </div>
 
+        <!-- Honeypot spam trap (hidden from humans; bots that fill it are rejected) -->
+        <input type="checkbox" name="botcheck" tabindex="-1" autocomplete="off" aria-hidden="true" style="display:none;">
+
         <button type="submit" class="submit-btn">Claim My Spot &rarr;</button>
         <div class="email-warning">The email you use here must match your Slack sign-in. That's how J.O.B.Z.E. recognizes you on day one.</div>
       </form>
@@ -1764,6 +1767,10 @@ document.querySelectorAll('a[href^="#"]').forEach(function(link) {
 
 /* ═══════ WAITLIST FORM SUBMIT ═══════ */
 (function() {
+  // Web3Forms access key — emails every submission to Warner.
+  // Get yours free at https://web3forms.com (enter your email, they send you the key), then paste it here.
+  var WEB3FORMS_ACCESS_KEY = 'f20a2b8f-9f33-4c5c-937f-a5c4127fcf63';
+
   var form = document.getElementById('waitlist-form');
   if (!form) return;
   form.addEventListener('submit', function(e) {
@@ -1779,19 +1786,33 @@ document.querySelectorAll('a[href^="#"]').forEach(function(link) {
     // Checkbox handling
     data.wants_resume_used = form.querySelector('input[name="wants_resume_used"]').checked ? 'true' : 'false';
 
+    function showSuccess() {
+      form.style.display = 'none';
+      document.getElementById('success-state').classList.add('show');
+    }
+
+    // 1) Email the submission to Warner via Web3Forms.
+    var emailPayload = Object.assign({
+      access_key: WEB3FORMS_ACCESS_KEY,
+      subject: 'New JOBZE waitlist signup: ' + (data.full_name || data.email || 'Unknown'),
+      from_name: 'JOBZE Waitlist',
+      replyto: data.email || ''
+    }, data);
+    var emailSend = fetch('https://api.web3forms.com/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(emailPayload)
+    }).catch(function() {});
+
+    // 2) Keep sending to the existing n8n webhook (waitlist data collection). Fire-and-forget.
     fetch('https://n8n.wvez.org/webhook/waitlist-form', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
-    })
-    .then(function(response) {
-        form.style.display = 'none';
-        document.getElementById('success-state').classList.add('show');
-    })
-    .catch(function(error) {
-        form.style.display = 'none';
-        document.getElementById('success-state').classList.add('show');
-    });
+    }).catch(function() {});
+
+    // Show the success state once the email request settles (never block the user).
+    emailSend.then(showSuccess, showSuccess);
   });
 })();
 
